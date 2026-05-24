@@ -34,6 +34,10 @@ class ChessSquare(QLabel):
 class GameResultDialog(QDialog):
     def __init__(self, parent, result_text, network, gamemode, username):
         super().__init__(parent)
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
+        
         self.parent = parent
         self.network = network
         self.gamemode = gamemode
@@ -44,12 +48,7 @@ class GameResultDialog(QDialog):
         self.network.rematch_request_received.connect(self.on_rematch_request)
         self.network.rematch_accept_received.connect(self.on_rematch_accept)
         self.network.rematch_decline_received.connect(self.on_rematch_decline)
-        # Устанавливаем иконку для окна
-        icon_path = resource_path("icon.ico")
-        self.setWindowIcon(QIcon(icon_path))
-        icon_path = resource_path("icon.ico")
-        self.setWindowIcon(QIcon(icon_path))
-        
+
         layout = QVBoxLayout()
         self.setLayout(layout)  # для QDialog используется setLayout, но можно и так
         
@@ -202,13 +201,13 @@ class ChessWindow(QMainWindow):
     """ГЛАВНОЕ ОКНО"""
     def __init__(self, game=None, gamemode=None, username=None, network=None):
         super().__init__()
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.game_over = False # флаг, закончена ли игра?
         self.username = username  # сохраняем имя для статистики
         self.gamemode = gamemode  # сохраняем режим игры
         self.db = Database() #база данных для статистики
         self.network = network #ну и сеть
-        icon_path = resource_path("icon.ico")
-        self.setWindowIcon(QIcon(icon_path))
         #ЗАГРУЗКА ИГРЫ
         if game:
             self.game = game #если есть игра то открыть ее

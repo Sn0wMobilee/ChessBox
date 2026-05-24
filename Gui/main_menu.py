@@ -9,23 +9,15 @@ from DataBase.session import load_session, clear_session, save_session
 from Network.network import P2PNetwork
 from Engine.utils import resource_path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.db = Database()
-        self.current_user = None
-        self.auto_login_done = False
-        self.init_ui()
-        self.hide()
-        self.check_auto_login()
-        self.opened = False
         # Устанавливаем иконку для окна
         icon_path = resource_path("icon.ico")
         self.setWindowIcon(QIcon(icon_path))
-        if not self.check_auto_login():
-            self.show()
-
+        self.db = Database()
+        self.current_user = None
+        self.init_ui()
         
     def check_auto_login(self):
         """Проверить, есть ли сохранённый пользователь"""
@@ -42,19 +34,11 @@ class LoginWindow(QMainWindow):
                 self.open_game_menu()
                 return True
         return False
-    
-    def showEvent(self, event):
-        """Если авто-вход уже выполнен — не показываем окно"""
-        if self.auto_login_done or self.opened:
-            event.ignore()  # не показываем
-        else:
-            super().showEvent(event)
-            self.opened = True
             
     def open_game_menu(self):
         self.menu_window = GameMenuWindow(self.current_user)
         self.menu_window.show()
-        self.close()
+        self.hide()
                     
     def init_ui(self):
         self.setWindowTitle("ChessBox")
@@ -143,11 +127,11 @@ class LoginWindow(QMainWindow):
             return
         
         success, result = self.db.login_user(username, password)
-        
         if success:
             self.current_user = username
+            # Сохраняем сессию на диск в папку Session
             save_session(username)
-            print(f"Сессия сохранена для {username}")
+            print(f"[LoginWindow] Сессия сохранена для {username}")
             self.show_message(f"Добро пожаловать, {username}!")
             self.open_game_menu()
         else:
@@ -178,12 +162,12 @@ class LoginWindow(QMainWindow):
 class GameMenuWindow(QMainWindow):
     def __init__(self, username):
         super().__init__()
-        self.username = username
-        self.db = Database()
-        self.init_ui()
         # Устанавливаем иконку для окна
         icon_path = resource_path("icon.ico")
         self.setWindowIcon(QIcon(icon_path))
+        self.username = username
+        self.db = Database()
+        self.init_ui()
     
     def init_ui(self):
         self.setWindowTitle("ChessBox")
@@ -297,6 +281,9 @@ class NetworkSetupWindow(QMainWindow):
     
     def __init__(self, username):
         super().__init__()
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.username = username
         self.network = P2PNetwork()
         self.network.move_received.connect(self.on_network_move)
@@ -304,9 +291,6 @@ class NetworkSetupWindow(QMainWindow):
         self.network.opponent_disconnected.connect(self.on_opponent_disconnected)
         self.network.status_message.connect(self.update_network_status)
         self.network.gamemode_received.connect(self.on_gamemode_received)
-        # Устанавливаем иконку для окна
-        icon_path = resource_path("icon.ico")
-        self.setWindowIcon(QIcon(icon_path))
         self.init_ui()
     
     def on_gamemode_received(self,gamemode):
@@ -478,12 +462,12 @@ class Gamemode_Window(QMainWindow):
     def __init__(self,username,network=None):
         self.network = network
         super().__init__()
-        self.username = username
-        self.setWindowTitle("ChessBox - выбор режима")
-        self.setFixedSize(500, 370)
         # Устанавливаем иконку для окна
         icon_path = resource_path("icon.ico")
         self.setWindowIcon(QIcon(icon_path))
+        self.username = username
+        self.setWindowTitle("ChessBox - выбор режима")
+        self.setFixedSize(500, 370)
 
         title = QLabel("<b>⬇ Выберите режим игры</b>")
         title.setStyleSheet("font-size: 24px; color: black;")
@@ -614,13 +598,13 @@ class Gamemode_Window(QMainWindow):
 class Stats_window(QMainWindow):
     def __init__(self, username):
         super().__init__()
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.setWindowTitle("ChessBox")
         self.setFixedSize(500, 370)
         self.username = username
         self.db = Database()
-        # Устанавливаем иконку для окна
-        icon_path = resource_path("icon.ico")
-        self.setWindowIcon(QIcon(icon_path))
 
         title = QLabel("<b>📊 Статистика</b>")
         title.setStyleSheet("font-size: 24px; color: black;")

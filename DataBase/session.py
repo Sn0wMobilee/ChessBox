@@ -1,7 +1,20 @@
 import os
 import json
+import sys
 
-SESSION_FILE = os.path.join(os.path.dirname(__file__), "session.json")
+import os
+import sys
+
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+REAL_SESSION_DIR = os.path.join(BASE_DIR, "Session")
+os.makedirs(REAL_SESSION_DIR, exist_ok=True)
+
+# Итоговый постоянный путь к файлу сессии
+SESSION_FILE = os.path.join(REAL_SESSION_DIR, "session.json")
 
 def save_session(username):
     """Сохранить имя пользователя"""
