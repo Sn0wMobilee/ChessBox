@@ -1,10 +1,10 @@
 class ChessPiece:
     '''ШАХМАТНЫЕ ФИГУРЫ И ПОСЛЕДУЮЩИЕ ТИПЫ'''
-    def __init__(self, color, symbol,):
-        self.color = color
-        self.symbol = symbol
-        self.has_moved = False
-        self.piece_type = None
+    def __init__(self, color, symbol,): #параметры класса фигуры: цвет и символ
+        self.color = color #атрибут цвета
+        self.symbol = symbol #атрибут символа
+        self.has_moved = False #атрибут подвигалась ли фигура
+        self.piece_type = None #атрибут типа фигур (будет добавлено в унаследованных классах)
         
-    def __str__(self):
-        return self.symbol
+    def __str__(self): #магический метод для текстового описания шахматной фигуры
+        return self.symbol #возвращение символа (будет добавлен позже)

@@ -45,3 +45,5 @@ class Queen(ChessPiece):
                 r += dr
                 c += dc
         return queen_possible_moves
+    
+    #Это по сути комбинация логики ладьи и слона

@@ -2,8 +2,8 @@ from .board import ChessBoard
 '''КЛАСС ПРОЦЕССОВ ИГРЫ'''
 class Game:
     def __init__(self):
-        self.board = ChessBoard()
-        self.game_over = False
+        self.board = ChessBoard() #создание объекта доски
+        self.game_over = False #игра не закончена
         self.player_names = {
             "white": "БЕЛЫЕ",
             "black": "ЧЕРНЫЕ"
@@ -17,21 +17,20 @@ class Game:
     '''НАЧАЛО ИГРЫ'''    
     def play(self):
         print("   Добро пожаловать в игру!")
-        #ПОТОМ ТУТ БУДУТ РАЗНЫЕ РЕЖИМЫ
         while True:
             if self.board.game_over:
-                self.board.display()
+                self.board.display() #показ конечного состояния доски
                 print("Игра завершена!")
                 choice = input("Хотите сыграть еще раз? (да/нет): ")
                 if choice.lower() == "да":
-                    self.board = ChessBoard()
+                    self.board = ChessBoard() #создание нового объекта доски
                     continue
                 else:
                     break
                 
             #ОТОБРАЖЕНИЕ ДОСКИ    
-            self.board.display()    
-            self.show_current_player_turn()
+            self.board.display() #отображение для консоли    
+            self.show_current_player_turn() #показать текущего игрока
             move = input("Введите ход (например, e2 e4) или выход для завершения:")
             if move.lower() == 'выход':
                 print("Игра завершена")

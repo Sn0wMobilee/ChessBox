@@ -1,16 +1,15 @@
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
-import sqlite3
-import hashlib
 import os
 import sys
-from database import Database
+from DataBase.database import Database
 from Gui.chessgame import ChessWindow
-from session import load_session, clear_session, save_session
+from DataBase.session import load_session, clear_session, save_session
 from Network.network import P2PNetwork
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Engine.utils import resource_path
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -20,6 +19,12 @@ class LoginWindow(QMainWindow):
         self.init_ui()
         self.hide()
         self.check_auto_login()
+        self.opened = False
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
+        if not self.check_auto_login():
+            self.show()
 
         
     def check_auto_login(self):
@@ -30,21 +35,21 @@ class LoginWindow(QMainWindow):
             # Проверяем, существует ли пользователь в БД
             success, result = self.db.auto_login(saved_user)
             print(f"Авто-вход: {success}, {result}")
-            
             if success:
                 self.current_user = saved_user
                 self.auto_login_done = True
+                self.opened = True
                 self.open_game_menu()
-                return
-        if not self.auto_login_done:   
-            self.show()
+                return True
+        return False
     
     def showEvent(self, event):
         """Если авто-вход уже выполнен — не показываем окно"""
-        if self.auto_login_done:
+        if self.auto_login_done or self.opened:
             event.ignore()  # не показываем
         else:
             super().showEvent(event)
+            self.opened = True
             
     def open_game_menu(self):
         self.menu_window = GameMenuWindow(self.current_user)
@@ -52,8 +57,8 @@ class LoginWindow(QMainWindow):
         self.close()
                     
     def init_ui(self):
-        self.setWindowTitle("Шахматы - Вход")
-        self.setGeometry(400, 200, 400, 400)
+        self.setWindowTitle("ChessBox")
+        self.setFixedSize(400, 400)
         
         central = QWidget()
         self.setCentralWidget(central)
@@ -61,7 +66,7 @@ class LoginWindow(QMainWindow):
         central.setLayout(main_layout)
         
         # Заголовок
-        title = QLabel("Шахматы")
+        title = QLabel("ChessBox")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("font-size: 32px; font-weight: bold; margin: 20px;")
         main_layout.addWidget(title)
@@ -176,25 +181,13 @@ class GameMenuWindow(QMainWindow):
         self.username = username
         self.db = Database()
         self.init_ui()
-        self.load_stats()
-    
-    def load_stats(self):
-        stats = self.db.get_stats(self.username)
-        
-        if stats:
-            wins = stats['wins']    
-            losses = stats['losses']
-            draws = stats['draws']
-            total = wins + losses + draws
-            self.stats_label.setText(
-                f"📊 Статистика: Побед: {wins}  Поражений: {losses}  Ничьих: {draws}  Всего: {total}"
-            )
-        else:
-            self.stats_label.setText("📊 Статистика: Нет данных")
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
     
     def init_ui(self):
-        self.setWindowTitle("Шахматы - Выбор режима")
-        self.setGeometry(400, 200, 500, 450)
+        self.setWindowTitle("ChessBox")
+        self.setFixedSize(500, 450)
         
         central = QWidget()
         self.setCentralWidget(central)
@@ -204,37 +197,78 @@ class GameMenuWindow(QMainWindow):
         logout_btn = QPushButton("🚪 Выйти из аккаунта")
         logout_btn.clicked.connect(self.logout)
         layout.addWidget(logout_btn)
-        
+        logout_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 8px 16px; font-size: 14px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        layout.addSpacing(20)
         # Приветствие
         welcome = QLabel(f"Добро пожаловать, {self.username}!")
         welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        welcome.setStyleSheet("font-size: 20px; font-weight: bold; margin: 20px;")
+        welcome.setStyleSheet("font-size: 23px; font-weight: 700;; margin: 20px;")
         layout.addWidget(welcome)
-        
-        # Статистика
-        self.stats_label = QLabel("Загрузка статистики...")
-        self.stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.stats_label)
-        
         layout.addSpacing(20)
         
         # Кнопки режимов
-        buttons = [
-            ("🎮 Играть" , "classic"),
-           # ("⚡️ Блиц (5 минут)", "blitz"),
-          #  ("🚀 Рапид (10 минут)", "rapid"),
-            ("🌐 Сетевая игра", "network"),
-            ("⚙️ Настройки", "settings"),
-        ]
         
-        for text, mode in buttons:
-            btn = QPushButton(text)
-            btn.setMinimumHeight(50)
-            btn.clicked.connect(lambda checked, m=mode: self.select_mode(m))
-            layout.addWidget(btn)
-        
+        offline_btn = QPushButton("🎮 Играть offline")
+        layout.addWidget(offline_btn)
+        offline_btn.clicked.connect(self.open_gamemode_choice_window)
+        offline_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 16.5px; font-size: 14px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        online_btn = QPushButton("🌐 Играть online")
+        layout.addWidget(online_btn)
+        online_btn.clicked.connect(self.start_network_setup)
+        online_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 16.5px; font-size: 14px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        self.sandbox_btn = QPushButton("🏖️ Играть в песочницу (в разработке)")
+        layout.addWidget(self.sandbox_btn)
+        self.sandbox_btn.clicked.connect(self.start_sandbox_mode)
+        self.sandbox_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 16.5px; font-size: 14px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        self.stats_btn = QPushButton("📊 Статистика")
+        layout.addWidget(self.stats_btn)
+        self.stats_btn.clicked.connect(self.show_stats)
+        self.stats_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 16.5px; font-size: 14px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
         layout.addStretch()
-    
+        
+    def start_sandbox_mode(self):
+        self.sandbox_btn.setText("Песочница в разработке!")   
+        
+    def open_gamemode_choice_window(self):
+        self.game_mode_window = Gamemode_Window(self.username)
+        self.game_mode_window.show()
+        self.close()
+        
+    def show_stats(self):
+        self.stats_window = Stats_window(self.username)
+        self.stats_window.show()
+        self.close()
+        
     def logout(self):
         """Выйти из аккаунта"""
         clear_session()  # удаляем сохранённого пользователя
@@ -242,32 +276,14 @@ class GameMenuWindow(QMainWindow):
         # Возвращаемся в окно входа
         self.login_window = LoginWindow()
         self.login_window.show()
-        
-    def select_mode(self, mode):
-        if mode == "classic":
-            self.start_game()
-        elif mode == "blitz":
-            self.start_game(time_control={"type": "blitz", "minutes": 5})
-        elif mode == "rapid":
-            self.start_game(time_control={"type": "rapid", "minutes": 10})
-        elif mode == "network":
-            self.start_network_setup()
-        elif mode == "settings":
-            QMessageBox.information(self, "Настройки", "Настройки в разработке")
-        elif mode == "exit":
-            self.close()
-    
-    def start_game(self, time_control=None):
-        self.game_window = ChessWindow(game=None, time_control=time_control, username=self.username)
+
+    def start_game(self, gamemode=None):
+        self.game_window = ChessWindow(game=None, gamemode = gamemode, username=self.username)
         self.game_window.show()
         self.close()
         
     def closeEvent(self, event):
-        """
-        Событие закрытия окна (Alt+F4, крестик)
-        НЕ очищаем сессию, просто закрываем
-        """
-        print("closeEvent вызван")
+        #типо alt + f4 или крестик
         event.accept()  # закрываем окно, сессия остаётся
         
     def start_network_setup(self):
@@ -287,17 +303,23 @@ class NetworkSetupWindow(QMainWindow):
         self.network.opponent_connected.connect(self.on_opponent_connected)
         self.network.opponent_disconnected.connect(self.on_opponent_disconnected)
         self.network.status_message.connect(self.update_network_status)
-        
+        self.network.gamemode_received.connect(self.on_gamemode_received)
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.init_ui()
     
-    def init_ui(self):
-        self.setWindowTitle("Сетевая игра")
-        self.setGeometry(500, 300, 400, 300)
+    def on_gamemode_received(self,gamemode):
+        self.start_network_game(gamemode)
         
-        central = QWidget()
-        self.setCentralWidget(central)
+    def init_ui(self):
+        self.setWindowTitle("ChessBox")
+        self.setFixedSize(500, 340)
+        
         layout = QVBoxLayout()
+        central = QWidget()
         central.setLayout(layout)
+        self.setCentralWidget(central)
         
         # Заголовок
         title = QLabel("🌐 Сетевая игра")
@@ -315,29 +337,56 @@ class NetworkSetupWindow(QMainWindow):
         self.ip_label = QLabel(f"Ваш IP: {self.network.get_local_ip()}")
         self.ip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.ip_label)
-        
-        layout.addSpacing(20)
+        self.ip_label.setStyleSheet("color: black; font-size: 15px; font-weight: 650;")
+        layout.addSpacing(13)
         
         # Кнопки
         self.host_btn = QPushButton("🎮 Создать игру (сервер)")
         self.host_btn.clicked.connect(self.host_game)
         layout.addWidget(self.host_btn)
+        self.host_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        
         
         self.join_btn = QPushButton("🔌 Подключиться к игре")
         self.join_btn.clicked.connect(self.join_game)
         layout.addWidget(self.join_btn)
+        self.join_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
         
         self.disconnect_btn = QPushButton("❌ Отключиться")
         self.disconnect_btn.clicked.connect(self.disconnect)
         self.disconnect_btn.setEnabled(False)
         layout.addWidget(self.disconnect_btn)
-        
-        layout.addSpacing(20)
+        self.disconnect_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
         
         # Кнопка назад
         back_btn = QPushButton("← Назад")
         back_btn.clicked.connect(self.go_back)
         layout.addWidget(back_btn)
+        back_btn.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
         
         layout.addStretch()
     
@@ -376,35 +425,271 @@ class NetworkSetupWindow(QMainWindow):
             self.network_status.setStyleSheet("color: green; font-weight: bold;")
         else:
             self.network_status.setStyleSheet("color: blue; font-weight: bold;")
+            
     def on_opponent_connected(self):
         self.update_network_status("Противник подключился!")
-        QMessageBox.information(self, "Сеть", "Противник подключён!\nНачинаем игру.")
-        self.start_network_game()
+        if self.network.is_host:
+            QMessageBox.information(self, "Сеть", "Противник подключён!")
+            self.open_gamemode_choice_window()
+        else:
+            QMessageBox.information(self, "Сеть", "Противник подключён!\nОжидаем выбора режима игры.")
     
     def on_opponent_disconnected(self):
-        self.update_network_status("Противник отключился")
-        QMessageBox.warning(self, "Сеть", "Противник отключился.")
-        self.disconnect()
+        # если флаг is_exiting существует и он True - мы сами выходим, молчим
+        if self.network.is_exiting == True:
+             # сбросим для будущих игр
+            self.disconnect()
+        # иначе противник отключился по настоящему
+        else:
+            self.update_network_status("Противник отключился")
+            QMessageBox.warning(self, "Сеть", "Противник отключился.")
+            self.disconnect()
     
     def on_network_move(self, from_pos, to_pos):
         """Получен ход от противника (передаётся в игровое окно)"""
         if hasattr(self, 'game_window') and self.game_window:
             self.game_window.on_network_move(from_pos, to_pos)
     
-    def start_network_game(self):
-        """Запустить игру с сетью"""
-        self.game_window = ChessWindow(
+    def start_network_game(self, gamemode):
+         """Запустить игру с сетью"""
+         self.game_window = ChessWindow(
             game=None, 
-            time_control=None, 
+            gamemode=gamemode, 
             username=self.username,
-            network=self.network  # ← передаём сеть
+            network=self.network  # передаём сеть
         )
-        self.game_window.show()
+         self.game_window.show()
+         self.close()
+        
+    def open_gamemode_choice_window(self):
+        self.game_mode_window = Gamemode_Window(self.username, self.network)
+        self.game_mode_window.show()
         self.close()
-    
+        
     def go_back(self):
         """Вернуться в главное меню"""
-        self.network.disconnect()
+        if self.network:
+            self.network.disconnect()
         self.close()
         self.menu_window = GameMenuWindow(self.username)
         self.menu_window.show()
+        
+class Gamemode_Window(QMainWindow):
+    def __init__(self,username,network=None):
+        self.network = network
+        super().__init__()
+        self.username = username
+        self.setWindowTitle("ChessBox - выбор режима")
+        self.setFixedSize(500, 370)
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
+
+        title = QLabel("<b>⬇ Выберите режим игры</b>")
+        title.setStyleSheet("font-size: 24px; color: black;")
+
+        self.bullet_button = QPushButton("🔫 Bullet (1.5 минуты)")
+        self.blitz_button = QPushButton("⚡ Blitz (5 минут)")
+        self.rapid_button = QPushButton(" ⏱️ Rapid (15 минут) ")
+        self.endless_button = QPushButton(" ∞ Endless (неограниченно) ")
+        self.back_button = QPushButton("← Назад")
+        
+        self.bullet_button.clicked.connect(self.bullet_timer)
+        self.blitz_button.clicked.connect(self.blitz_timer)
+        self.rapid_button.clicked.connect(self.rapid_timer)
+        self.endless_button.clicked.connect(self.endless_timer)
+        self.back_button.clicked.connect(self.go_back)
+        
+        layout = QVBoxLayout()
+        layout.addStretch(1)
+        layout.addWidget(title)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(25)
+        layout.addWidget(self.bullet_button)
+        layout.addWidget(self.blitz_button)
+        layout.addWidget(self.rapid_button)
+        layout.addWidget(self.endless_button)
+        layout.addWidget(self.back_button)
+        layout.addSpacing(20)
+        layout.setContentsMargins(10,0,10,0) 
+        
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+        
+        self.bullet_button.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        
+        self.blitz_button.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        
+        self.rapid_button.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        
+        self.endless_button.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        self.back_button.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 650;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        
+        title.setStyleSheet("""
+    QLabel {
+        color: black;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 20px;
+        font-weight: 600;
+    }
+""")
+    def start_network_game(self, gamemode=None):
+        """Запустить игру с сетью"""
+        self.game_window = ChessWindow(game=None,  gamemode=gamemode, username=self.username, network=self.network
+        )
+        self.game_window.show()
+        self.close()
+                
+    def bullet_timer(self):
+        if self.network:
+            self.network.send_gamemode("bullet")
+            self.start_network_game("bullet")
+        else:
+            self.start_game("bullet")
+
+    def blitz_timer(self):
+        if self.network:
+            self.network.send_gamemode("blitz")
+            self.start_network_game("blitz")
+        else:
+            self.start_game("blitz")
+
+    def rapid_timer(self):
+        if self.network:
+            self.network.send_gamemode("rapid")
+            self.start_network_game("rapid")
+        else:
+            self.start_game("rapid")
+        
+    def endless_timer(self):
+        if self.network:
+            self.network.send_gamemode("endless")
+            self.start_network_game("endless")
+        else:
+            self.start_game("endless")
+    
+    def start_game(self, gamemode=None):
+        self.game_window = ChessWindow(game=None, gamemode = gamemode, username=self.username)
+        self.game_window.show()
+        self.close()
+        
+    def go_back(self):
+        """Вернуться в главное меню"""
+        self.close()
+        self.menu_window = GameMenuWindow(self.username)
+        self.menu_window.show()
+        
+class Stats_window(QMainWindow):
+    def __init__(self, username):
+        super().__init__()
+        self.setWindowTitle("ChessBox")
+        self.setFixedSize(500, 370)
+        self.username = username
+        self.db = Database()
+        # Устанавливаем иконку для окна
+        icon_path = resource_path("icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
+
+        title = QLabel("<b>📊 Статистика</b>")
+        title.setStyleSheet("font-size: 24px; color: black;")
+        self.stats_label = QLabel()
+        self.load_stats()
+        self.back_button = QPushButton("← Назад")
+        self.back_button.clicked.connect(self.go_back)
+        
+        layout = QVBoxLayout()
+        layout.addStretch(1)
+        layout.addWidget(title)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.stats_label)
+        layout.addWidget(self.back_button)
+        layout.addSpacing(5)
+        layout.setContentsMargins(10,0,10,0) 
+        
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+        self.stats_label.setStyleSheet("color: black; font-size: 15px; font-weight: 600")
+        self.back_button.setStyleSheet("""
+    QPushButton {background-color: #f0f0f0; border: 2px solid #dcdcdc;
+    border-radius: 12px; color: #333; padding: 10px; font-size: 16px; font-weight: 700;
+    }
+    QPushButton:hover {background-color: #e5e5e5; border-color: #bbb;}
+    QPushButton:pressed { background-color: #d0d0d0;}
+    """)
+        
+        title.setStyleSheet("""
+    QLabel {
+        color: black;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 20px;
+        font-weight: 600;
+    }
+""")
+    def load_stats(self):
+        stats = self.db.get_stats(self.username)
+        
+        if stats:
+            bullet_wins = stats['bullet_wins']    
+            bullet_losses = stats['bullet_losses']
+            bullet_draws = stats['bullet_draws']
+            blitz_wins = stats['blitz_wins']    
+            blitz_losses = stats['blitz_losses']
+            blitz_draws = stats['blitz_draws']
+            rapid_wins = stats['rapid_wins']    
+            rapid_losses = stats['rapid_losses']
+            rapid_draws = stats['rapid_draws']
+            endless_wins = stats['endless_wins']    
+            endless_losses = stats['endless_losses']
+            endless_draws = stats['endless_draws']
+            total_wins = bullet_wins + blitz_wins + rapid_wins + endless_wins
+            total_losses = bullet_losses + blitz_losses + rapid_losses + endless_losses
+            total_draws = bullet_draws + blitz_draws + rapid_draws + endless_draws
+            self.stats_label.setText(
+                f"""
+                Bullet: побед - {bullet_wins}, поражений - {bullet_losses}, ничьих - {bullet_draws}\n
+                Blitz: побед - {blitz_wins}, поражений - {blitz_losses}, ничьих - {blitz_draws}\n
+                Rapid: побед - {rapid_wins}, поражений - {rapid_losses}, ничьих - {rapid_draws}\n
+                Timeless: Побед - {endless_wins}, поражений - {endless_losses}, ничьих - {endless_draws}\n
+                Всего: побед - {total_wins}, поражений - {total_losses}, ничьих - {total_draws}
+                
+                """
+            )
+    def go_back(self):
+        """Вернуться в главное меню"""
+        self.close()
+        self.menu_window = GameMenuWindow(self.username)
+        self.menu_window.show()    
